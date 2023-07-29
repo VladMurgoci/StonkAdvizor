@@ -6,3 +6,4 @@ venv/
 *.sqlite
 instance/
 .venv/
+.idea/
