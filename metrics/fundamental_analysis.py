@@ -96,9 +96,3 @@ def get_ticker_symbols_finnhub() -> List[str]:
             ticker_symbols.append(dicts['symbol'])
 
     return ticker_symbols
-
-# print(get_ticker_symbols())
-us_ticker_symbols = get_ticker_symbols_finnhub()
-# print(ticker_symbols)
-print(len(us_ticker_symbols))
-# print("AAPL" in get_ticker_symbols_finnhub())
