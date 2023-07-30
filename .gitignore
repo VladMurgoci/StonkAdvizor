@@ -7,3 +7,5 @@ venv/
 instance/
 .venv/
 .idea/
+.pylintrc
+.vscode/
