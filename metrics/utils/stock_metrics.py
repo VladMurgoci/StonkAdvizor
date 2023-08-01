@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import List, Optional
 
 import finnhub
 import yfinance as yf
@@ -41,12 +41,12 @@ class StockMetrics:
         if 'marketCap' in ticker_info:
             self.market_cap = ticker_info['marketCap']
         if 'activity_domain' in ticker_info:
-            self.activity_domain = ticker_info['actviity_domain']
+            self.activity_domain = ticker_info['sector']
 
     def _initialize_from_yearly_income_statement(self, yearly_income_statement):
         if 'Basic EPS' in yearly_income_statement.index:
-            self.earnings_per_share = yearly_income_statement.loc['Basic EPS'].tolist()
-            self.earnings_per_share = self.earnings_per_share[0]
+            self.basic_eps_4yrs = yearly_income_statement.loc['Basic EPS'].tolist()
+            self.basic_eps = self.basic_eps_4yrs[0]
 
 
     def _initialize_from_yearly_balance_sheet(self, yearly_balance_sheet):
