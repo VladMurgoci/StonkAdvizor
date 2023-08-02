@@ -42,18 +42,51 @@
         .pagination button {
             margin: 5px;
         }
+        .loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            background-color: #f7f9f6;
+            transition: opacity 0.75s, visibility 0.75s;
+        }
+        .loader-hidden{
+            opacity: 0;
+            visibility: hidden;
+        }
+        .loader::after{
+            content: "";
+            width: 75px;
+            height: 75px;
+            border: 15px solid #dddddd;
+            border-top-color: #7449f5;
+            border-radius: 50%;
+            animation: loading 0.75s ease infinite;
+        }
+        @keyframes loading {
+            from{
+                transform: rotate(0turn);
+            }
+            to{
+                transform: rotate(1turn);
+            }
+        }
+
     </style>
 </head>
 <body>
     <h1>Stock Browser</h1>
-
+{#    <div class="loader" id="loader"></div>#}
     <table>
         <thead>
             <tr>
-                <th>Ticker</th>
-                <th>Market Cap</th>
-                <th>Net Income</th>
-                <th>Basic EPS</th>
+                <th class="text-center">Ticker</th>
+                <th class="text-center">Market Cap</th>
+                <th class="text-center">Net Income</th>
+                <th class="text-center">Basic EPS</th>
             </tr>
         </thead>
         <tbody id="stocksTableBody">
@@ -64,9 +97,8 @@
     <div class="pagination" id="pagination">
         <!-- The pagination buttons will be populated using JavaScript -->
     </div>
-
-    <script>
- var ticker_list = [];
+<script>
+    var ticker_list = [];
     var ticker_xhr = new XMLHttpRequest();
     ticker_xhr.open('GET', '/tickers');
     ticker_xhr.onreadystatechange = function() {
@@ -75,12 +107,11 @@
                 ticker_list = JSON.parse(ticker_xhr.responseText);
                 // Initial setup: display first page and generate pagination buttons
                 updateTable(1);
-                generatePaginationButtons();
+                generatePaginationButtons(1);
             }
         }
     };
     ticker_xhr.send();
-
     // Function to update the table with stock data
     function updateTable(pageNumber) {
         var tableBody = document.getElementById("stocksTableBody");
@@ -90,6 +121,8 @@
         var startIndex = (pageNumber - 1) * itemsPerPage;
         var endIndex = Math.min(startIndex + itemsPerPage, ticker_list.length);
 
+        var completedRequests = 0; // to keep track of completed requests
+
         // Create a closure to preserve the value of 'i'
         function processStockData(i) {
             var xhr = new XMLHttpRequest();
@@ -98,34 +131,44 @@
                 if (xhr.readyState === XMLHttpRequest.DONE) {
                     if (xhr.status === 200) {
                         var responseData = JSON.parse(xhr.responseText);
-                        var stockName = ticker_list[i];
-                        var marketCap = responseData["market_cap"];
-                        var row = `<tr>
-                                    <td>${stockName}</td>
-                                    <td>${marketCap}</td>
+                        var row = `<tr style="text-align:center">
+                                    <td>${ticker_list[i]}</td>
+                                    <td>${responseData["market_cap"]}</td>
                                     <td>${responseData["net_income"]}</td>
                                     <td>${responseData["basic_eps"]}</td>
                                 </tr>`;
                         tableBody.innerHTML += row;
                     }
+                    completedRequests++; // increment count of completed requests
                 }
             };
             xhr.send();
         }
 
-        // Loop through the tickers and call processStockData for each
-        for (var i = startIndex; i < endIndex; i++) {
-            processStockData(i);
-        }
+{#    document.getElementById("loader").style.display = "block"; // show loader#}
+    generatePaginationButtons(pageNumber);
+    // Loop through the tickers and call processStockData for each
+    for (var i = startIndex; i < endIndex; i++) {
+        processStockData(i);
     }
+{#    document.ajaxStop(function() {#}
+{#    const loader = document.querySelector(".loader");#}
+{#    loader.classList.add("loader-hidden");#}
+{#    loader.addEventListener("transitioned", () => {#}
+{#        document.body.removeChild("loader");#}
+{#    })#}
+{# });  #}
+}
 
     // Function to generate pagination buttons
-    function generatePaginationButtons() {
+    function generatePaginationButtons(currentPage) {
         var paginationContainer = document.getElementById("pagination");
         paginationContainer.innerHTML = ""; // Clear existing buttons
 
         var totalPages = Math.ceil(ticker_list.length / 25);
-        for (var i = 1; i <= totalPages; i++) {
+        var maxPage = Math.min(currentPage + 2, totalPages);
+        var start_page = Math.max(currentPage - 2, 1);
+        for (var i = start_page; i <= maxPage; i++) {
             var button = document.createElement("button");
             button.innerText = i;
             button.addEventListener("click", function() {
@@ -135,6 +178,7 @@
             paginationContainer.appendChild(button);
         }
     }
-    </script>
+</script>
 </body>
 </html>
+

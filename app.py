@@ -3,6 +3,7 @@ from metrics.fundamental_analysis import get_ticker_symbols_finnhub
 from metrics.fundamental_analysis import get_fundamental_analysis_metrics
 from metrics.utils.stock_metrics import StockMetrics
 from flask import jsonify
+import csv
 app = Flask(__name__)
 
 
@@ -19,11 +20,13 @@ def get_stock_data(ticker_symbol):
     return jsonify(metrics)
 
 
+
 @app.route('/tickers')
 def get_tickers():
-    tickers = get_ticker_symbols_finnhub()
-    return tickers[0:10]
-    #return tickers
+    with open('data/tickers.csv', 'r') as file:
+        reader = csv.reader(file)
+        tickers = list(reader)
+    return tickers
 
 
 if __name__ == '__main__':
