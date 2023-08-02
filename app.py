@@ -17,7 +17,13 @@ def stock_browser():
 @app.route('/stock/<ticker_symbol>')
 def get_stock_data(ticker_symbol):
     metrics = StockMetrics(ticker_symbol)
-    return jsonify(metrics)
+    return jsonify({
+        'ticker_symbol': metrics.ticker_symbol,
+        'market_cap': metrics.market_cap,
+        'net_income': metrics.net_income,
+        'basic_eps': metrics.basic_eps,
+        'activity_domain': metrics.activity_domain
+    })
 
 
 
