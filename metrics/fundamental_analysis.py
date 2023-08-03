@@ -5,6 +5,7 @@ import finnhub
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from dacite import from_dict
 
 FINNHUB_CLIENT = finnhub.Client(api_key="cj4oprpr01qq6hgdnt60cj4oprpr01qq6hgdnt6g")
 EXCHANGES = ['US']
@@ -31,6 +32,7 @@ YFINANCE_METRICS_MAP = {
     'price_to_earnings_growth': ['pegRatio'],
     'price_to_book_ratio': ['priceToBook'],
 }
+
 @dataclass
 class FundamentalAnalysisMetrics:
     """
@@ -46,15 +48,15 @@ class FundamentalAnalysisMetrics:
     forward_price_earnings_ratio: float
     projected_earnings_growth: float
     free_cash_flow: float
-    return_on_equity: float
+    return_on_equity: List[float]
     dividend_payout_ratio: float
-    year_over_year_revenue_growth: float
+    year_over_year_revenue_growth: List[float]
     price_to_free_cash_flow: float
     stock_price: float
-    debt_to_equity_ratio: float
-    return_on_assets: float
-    return_on_investments: float
-    revenue_per_employee: float
+    debt_to_equity_ratio: List[float]
+    return_on_assets: List[float]
+    return_on_investments: List[float]
+    revenue_per_employee: List[float]
     price_to_earnings_growth: float
     price_to_book_ratio: float
 
@@ -69,11 +71,15 @@ def check_metric_exists_and_fill_out(ticker: yf.Ticker,
         return yf_metric in ticker.info or yf_metric in ticker.income_stmt.index or \
                yf_metric in ticker.financials.index or yf_metric in ticker.balance_sheet.index
     if all(property_exists(yf_metric) for yf_metric in YFINANCE_METRICS_MAP[metric_name]):
-        metrics[metric_name] = formula()
+        try:
+            metrics[metric_name] = formula()
+        except Exception as e:
+            # print(f"Error while computing {metric_name} for ticker {ticker.ticker} : {e}")
+            metrics[metric_name] = alt
     else:
         metrics[metric_name] = alt
 
-def get_fundamental_analysis_metrics(ticker_symbol: str) -> Dict[str, str]:
+def get_fundamental_analysis_metrics(ticker_symbol: str) -> FundamentalAnalysisMetrics:
     """Computes the fundamental analysis metrics for a given ticker symbol
 
     Args:
@@ -82,61 +88,64 @@ def get_fundamental_analysis_metrics(ticker_symbol: str) -> Dict[str, str]:
     Returns:
         Dict[str, str]: _description_
     """
-    ticker = yf.Ticker(ticker_symbol)
+    try:
+        ticker = yf.Ticker(ticker_symbol)
+    except ValueError:
+        return None
     ticker_info = ticker.info
     yearly_income_statement, yearly_balance_sheet  = ticker.income_stmt, ticker.quarterly_balance_sheet
     financials = ticker.financials
     metrics = {}
     check_metric_exists_and_fill_out(ticker, metrics, 'activity_domain', lambda: ticker_info['sector'], 'n/a')
-    check_metric_exists_and_fill_out(ticker, metrics, 'market_cap', lambda: ticker_info['marketCap'], 'n/a')
+    check_metric_exists_and_fill_out(ticker, metrics, 'market_cap', lambda: ticker_info['marketCap'], -1)
     # @Mihneaghitu @VladMurgoci TODO : review whether 'Total Revenue' actually refers to net revenue
-    check_metric_exists_and_fill_out(ticker, metrics, 'net_revenue', lambda: financials.loc['Total Revenue'].tolist(), 'n/a')
-    check_metric_exists_and_fill_out(ticker, metrics, 'net_income', lambda: financials.loc['Net Income'].tolist(), 'n/a')
+    check_metric_exists_and_fill_out(ticker, metrics, 'net_revenue', lambda: financials.loc['Total Revenue'].tolist(), [-1])
+    check_metric_exists_and_fill_out(ticker, metrics, 'net_income', lambda: financials.loc['Net Income'].tolist(), [-1])
     # Basic EPS = (Net Income - Preferred Dividends) / Weighted Average Number of Common Shares Outstanding
     check_metric_exists_and_fill_out(ticker, metrics, 'earnings_per_share', 
-                                     lambda: [ticker_info['trailingEps']] + yearly_income_statement.loc['Basic EPS'].tolist(), 'n/a')
-    check_metric_exists_and_fill_out(ticker, metrics, 'forward_earnings_per_share', lambda: ticker_info['forwardEps'], 'n/a')
+                                     lambda: [ticker_info['trailingEps']] + yearly_income_statement.loc['Basic EPS'].tolist(), [-1])
+    check_metric_exists_and_fill_out(ticker, metrics, 'forward_earnings_per_share', lambda: ticker_info['forwardEps'], -1)
     # P/E ratio = Current Market Price per Share / Earnings Per Share (EPS)
-    check_metric_exists_and_fill_out(ticker, metrics, 'price_earnings_ratio', lambda: ticker_info['trailingPE'], 'n/a')
-    check_metric_exists_and_fill_out(ticker, metrics, 'forward_price_earnings_ratio', lambda: ticker_info['forwardPE'], 'n/a')
+    check_metric_exists_and_fill_out(ticker, metrics, 'price_earnings_ratio', lambda: ticker_info['trailingPE'], -1)
+    check_metric_exists_and_fill_out(ticker, metrics, 'forward_price_earnings_ratio', lambda: ticker_info['forwardPE'], -1)
     # @Mihneaghitu @VladMurgoci TODO : check whether we want both the trailing and forward PEG ratios and if they refer to what we think they refer
     # Projected Earnings Growth Rate = ((Future EPS - Current EPS) / Current EPS) * 100
     check_metric_exists_and_fill_out(ticker, metrics, 'projected_earnings_growth', 
-                                     lambda: metrics['forward_earnings_per_share'] / metrics['earnings_per_share'][0], 'n/a')
+                                     lambda: metrics['forward_earnings_per_share'] / metrics['earnings_per_share'][0], -1)
     # Free Cash Flow (FCF) = Operating Cash Flow - Capital Expenditures
-    check_metric_exists_and_fill_out(ticker, metrics, 'free_cash_flow', lambda: ticker_info['freeCashflow'], 'n/a')
+    check_metric_exists_and_fill_out(ticker, metrics, 'free_cash_flow', lambda: ticker_info['freeCashflow'], -1)
     # Return on Equity (ROE) = Net Income / Shareholders Equity
     check_metric_exists_and_fill_out(ticker, metrics, 'return_on_equity', 
-                                     lambda: (financials.loc['Net Income'] / yearly_balance_sheet.loc['Stockholders Equity']).tolist() + ticker_info['returnOnEquity'], 'n/a')
+                                     lambda: (financials.loc['Net Income'] / yearly_balance_sheet.loc['Stockholders Equity']).tolist() + ticker_info['returnOnEquity'], [-1])
     # Dividend Payout Ratio = (Dividends per Share / Earnings per Share) * 100
-    check_metric_exists_and_fill_out(ticker, metrics, 'dividend_payout_ratio', lambda: ticker_info['payoutRatio'], 'n/a')
+    check_metric_exists_and_fill_out(ticker, metrics, 'dividend_payout_ratio', lambda: ticker_info['payoutRatio'], [-1])
     # Year over Year Revenue Growth Rate = ((Current Year Revenue - Last Year Revenue) / Last Year Revenue) * 100
     def _compute_year_over_year_revenue_growth():
         total_revenues = np.array(financials.loc['Total Revenue'].tolist() + [ticker_info['revenue']])
         return ((total_revenues[1:] - total_revenues[:-1]) / total_revenues[:-1]) * 100
-    check_metric_exists_and_fill_out(ticker, metrics, 'year_over_year_revenue_growth', _compute_year_over_year_revenue_growth, 'n/a')
+    check_metric_exists_and_fill_out(ticker, metrics, 'year_over_year_revenue_growth', _compute_year_over_year_revenue_growth, [-1])
     # Price to Free Cash Flow = Stock Price / Free Cash Flow per Share
     check_metric_exists_and_fill_out(ticker, metrics, 'price_to_free_cash_flow', 
-                                     lambda: ticker_info['regularMarketPreviousClose'] / (ticker_info['freeCashflow'] / ticker_info['sharesOutstanding']), 'n/a')
-    check_metric_exists_and_fill_out(ticker, metrics, 'stock_price', lambda: ticker_info['regularMarketPreviousClose'], 'n/a')
+                                     lambda: ticker_info['regularMarketPreviousClose'] / (ticker_info['freeCashflow'] / ticker_info['sharesOutstanding']), -1)
+    check_metric_exists_and_fill_out(ticker, metrics, 'stock_price', lambda: ticker_info['regularMarketPreviousClose'], -1)
     # Debt to Equity Ratio = Total Liabilities / Shareholders Equity
     check_metric_exists_and_fill_out(ticker, metrics, 'debt_to_equity_ratio', 
-                                     lambda: (yearly_income_statement.loc['Total Debt'] / yearly_income_statement.loc['Stockholders Equity']).tolist(), 'n/a')
+                                     lambda: (yearly_income_statement.loc['Total Debt'] / yearly_income_statement.loc['Stockholders Equity']).tolist(), [-1])
     # Return on Assets (ROA) = Net Income / Total Assets
     check_metric_exists_and_fill_out(ticker, metrics, 'return_on_assets', 
-                                     lambda: (financials.loc['Net Income'] / yearly_income_statement.loc['Total Assets']).tolist(), 'n/a')
+                                     lambda: (financials.loc['Net Income'] / yearly_balance_sheet.loc['Total Assets']).tolist(), [-1])
     # Return on Investments (ROI) = Net Income / Total Investments
     check_metric_exists_and_fill_out(ticker, metrics, 'return_on_investments', 
-                                     lambda: (financials.loc['Net Income'] / yearly_income_statement.loc['Investments And Advances']).tolist(), 'n/a')
+                                     lambda: (financials.loc['Net Income'] / yearly_income_statement.loc['Investments And Advances']).tolist(), [-1])
     # Revenue per Employee = Total Revenue / Number of Employees
     check_metric_exists_and_fill_out(ticker, metrics, 'revenue_per_employee', 
-                                     lambda: (financials.loc['Total Revenue'] / ticker_info['fullTimeEmployees']).tolist(), 'n/a')
+                                     lambda: (financials.loc['Total Revenue'] / ticker_info['fullTimeEmployees']).tolist(), [-1])
     # Price to Earnings Growth (PEG) Ratio = P/E ratio / Projected earnings growth rate
-    check_metric_exists_and_fill_out(ticker, metrics, 'price_to_earnings_growth', lambda: ticker_info['pegRatio'], 'n/a')
+    check_metric_exists_and_fill_out(ticker, metrics, 'price_to_earnings_growth', lambda: ticker_info['pegRatio'], -1)
     # Price to Book Ratio = Stock Price / Book Value per Share
-    check_metric_exists_and_fill_out(ticker, metrics, 'price_to_book_ratio', lambda: ticker_info['priceToBook'], 'n/a')
+    check_metric_exists_and_fill_out(ticker, metrics, 'price_to_book_ratio', lambda: ticker_info['priceToBook'], -1)
 
-    return metrics
+    return from_dict(data_class=FundamentalAnalysisMetrics, data=metrics)
 
 def get_ticker_symbols_finnhub() -> List[yf.Ticker]:
     """ Gets all the ticker symbols from the Finnhub API for all the exchanges specified in the EXCHANGES list
