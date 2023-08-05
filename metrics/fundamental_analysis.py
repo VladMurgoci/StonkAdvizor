@@ -22,7 +22,7 @@ YFINANCE_METRICS_MAP = {
     'free_cash_flow': ['freeCashflow'],
     'return_on_equity': ['Net Income', 'Stockholders Equity', 'returnOnEquity'],
     'dividend_payout_ratio': ['payoutRatio'],
-    'year_over_year_revenue_growth': ['Total Revenue', 'revenue'],
+    'year_over_year_revenue_growth': ['Total Revenue', 'totalRevenue'],
     'price_to_free_cash_flow': ['regularMarketPreviousClose', 'freeCashflow', 'sharesOutstanding'],
     'stock_price': ['regularMarketPreviousClose'],
     'debt_to_equity_ratio': ['Total Debt', 'Stockholders Equity'],
@@ -38,6 +38,7 @@ class FundamentalAnalysisMetrics:
     """
         The metrics which are lists represent the values for the last len(list) years
     """
+    ticker: str
     activity_domain: str
     market_cap: int
     net_revenue: List[float]
@@ -93,9 +94,10 @@ def get_fundamental_analysis_metrics(ticker_symbol: str) -> FundamentalAnalysisM
     except ValueError:
         return None
     ticker_info = ticker.info
-    yearly_income_statement, yearly_balance_sheet  = ticker.income_stmt, ticker.quarterly_balance_sheet
+    yearly_income_statement, yearly_balance_sheet  = ticker.income_stmt, ticker.balance_sheet
     financials = ticker.financials
     metrics = {}
+    metrics['ticker'] = ticker_symbol
     check_metric_exists_and_fill_out(ticker, metrics, 'activity_domain', lambda: ticker_info['sector'], 'n/a')
     check_metric_exists_and_fill_out(ticker, metrics, 'market_cap', lambda: ticker_info['marketCap'], -1)
     # @Mihneaghitu @VladMurgoci TODO : review whether 'Total Revenue' actually refers to net revenue
@@ -118,11 +120,11 @@ def get_fundamental_analysis_metrics(ticker_symbol: str) -> FundamentalAnalysisM
     check_metric_exists_and_fill_out(ticker, metrics, 'return_on_equity', 
                                      lambda: (financials.loc['Net Income'] / yearly_balance_sheet.loc['Stockholders Equity']).tolist() + ticker_info['returnOnEquity'], [-1])
     # Dividend Payout Ratio = (Dividends per Share / Earnings per Share) * 100
-    check_metric_exists_and_fill_out(ticker, metrics, 'dividend_payout_ratio', lambda: ticker_info['payoutRatio'], [-1])
+    check_metric_exists_and_fill_out(ticker, metrics, 'dividend_payout_ratio', lambda: ticker_info['payoutRatio'], -1)
     # Year over Year Revenue Growth Rate = ((Current Year Revenue - Last Year Revenue) / Last Year Revenue) * 100
     def _compute_year_over_year_revenue_growth():
-        total_revenues = np.array(financials.loc['Total Revenue'].tolist() + [ticker_info['revenue']])
-        return ((total_revenues[1:] - total_revenues[:-1]) / total_revenues[:-1]) * 100
+        total_revenues = np.array(financials.loc['Total Revenue'].tolist() + [ticker_info['totalRevenue']])
+        return list(((total_revenues[1:] - total_revenues[:-1]) / total_revenues[:-1]) * 100)
     check_metric_exists_and_fill_out(ticker, metrics, 'year_over_year_revenue_growth', _compute_year_over_year_revenue_growth, [-1])
     # Price to Free Cash Flow = Stock Price / Free Cash Flow per Share
     check_metric_exists_and_fill_out(ticker, metrics, 'price_to_free_cash_flow', 
@@ -130,13 +132,13 @@ def get_fundamental_analysis_metrics(ticker_symbol: str) -> FundamentalAnalysisM
     check_metric_exists_and_fill_out(ticker, metrics, 'stock_price', lambda: ticker_info['regularMarketPreviousClose'], -1)
     # Debt to Equity Ratio = Total Liabilities / Shareholders Equity
     check_metric_exists_and_fill_out(ticker, metrics, 'debt_to_equity_ratio', 
-                                     lambda: (yearly_income_statement.loc['Total Debt'] / yearly_income_statement.loc['Stockholders Equity']).tolist(), [-1])
+                                     lambda: (yearly_balance_sheet.loc['Total Debt'] / yearly_balance_sheet.loc['Stockholders Equity']).tolist(), [-1])
     # Return on Assets (ROA) = Net Income / Total Assets
     check_metric_exists_and_fill_out(ticker, metrics, 'return_on_assets', 
                                      lambda: (financials.loc['Net Income'] / yearly_balance_sheet.loc['Total Assets']).tolist(), [-1])
     # Return on Investments (ROI) = Net Income / Total Investments
     check_metric_exists_and_fill_out(ticker, metrics, 'return_on_investments', 
-                                     lambda: (financials.loc['Net Income'] / yearly_income_statement.loc['Investments And Advances']).tolist(), [-1])
+                                     lambda: (financials.loc['Net Income'] / yearly_balance_sheet.loc['Investments And Advances']).tolist(), [-1])
     # Revenue per Employee = Total Revenue / Number of Employees
     check_metric_exists_and_fill_out(ticker, metrics, 'revenue_per_employee', 
                                      lambda: (financials.loc['Total Revenue'] / ticker_info['fullTimeEmployees']).tolist(), [-1])
