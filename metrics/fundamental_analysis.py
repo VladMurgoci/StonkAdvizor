@@ -163,7 +163,7 @@ def get_fundamental_analysis_metrics(ticker_symbol: str) -> FundamentalAnalysisM
     check_metric_exists_and_fill_out(ticker, metrics, 'forward_price_earnings_ratio', lambda: ticker_info['forwardPE'])
     # @Mihneaghitu @VladMurgoci TODO : check whether we want both the trailing and forward PEG ratios and if they refer to what we think they refer
     # Projected Earnings Growth Rate = ((Future EPS - Current EPS) / Current EPS) * 100
-    check_metric_exists_and_fill_out(ticker, metrics, 'projected_earnings_growth', lambda: ticker_info['forwardPE'] / ticker_info['trailingEPS'])
+    check_metric_exists_and_fill_out(ticker, metrics, 'projected_earnings_growth', lambda: ticker_info['forwardPE'] / ticker_info['trailingEps'])
     # Free Cash Flow (FCF) = Operating Cash Flow - Capital Expenditures
     check_metric_exists_and_fill_out(ticker, metrics, 'free_cash_flow', lambda: ticker_info['freeCashflow'])
     # Return on Equity (ROE) = Net Income / Shareholders Equity
