@@ -1,28 +1,24 @@
-import matplotlib.pyplot as plt
-import sklearn
 import torch
-import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import DataLoader
 
 METRICS_COUNT = 51
 
 class Autoencoder(torch.nn.Module): 
-    def __init__(self, input_size, latent_repr_size) -> None:
+    def __init__(self, input_size, latent_repr_size, reduction) -> None:
         super().__init__()
-        self.reduction = 2
 
         encoder_modules = [] 
         depth = -1
         while True:
             depth += 1
-            i_size = input_size // (self.reduction ** depth)
-            o_size = input_size // (self.reduction ** (depth + 1))
+            i_size = int(input_size // (reduction ** depth))
+            o_size = int(input_size // (reduction ** (depth + 1)))
+            print(f"i_size: {i_size}, o_size: {o_size}")
             if o_size <= latent_repr_size:
                 break
             encoder_modules.append(torch.nn.Linear(i_size, o_size))
             encoder_modules.append(torch.nn.ReLU())
-        encoder_modules.append(torch.nn.Linear(input_size // (self.reduction ** depth), latent_repr_size))
+        encoder_modules.append(torch.nn.Linear(int(input_size // (reduction ** depth)), latent_repr_size))
         self.encoder = torch.nn.Sequential(*encoder_modules)
 
         encoder_shapes = [layer.weight.shape for idx, layer in enumerate(self.encoder) if idx % 2 == 0]
@@ -46,7 +42,7 @@ class Autoencoder(torch.nn.Module):
         return decoded
     
     
-    def train(self, data, loss_f, optim, n_epochs=20, batch_size=32):
+    def train(self, data, loss_f, optim, n_epochs=100, batch_size=32):
         data_loader = DataLoader(data, batch_size=batch_size, shuffle=False)
         for epoch in range(n_epochs):
             epoch_loss = 0
@@ -58,11 +54,23 @@ class Autoencoder(torch.nn.Module):
                 optim.step()
                 epoch_loss += loss.item() * len(batch_data)
             epoch_loss /= len(data.tensors[0])
+            if epoch == n_epochs - 1:
+                self._model_loss = epoch_loss
             print(f"Epoch {epoch} loss: {epoch_loss}")
         print("Training finished")
 
+    def encoder_pass(self, data):
+        return self.encoder(data)
 
     def test(self, data):
         with torch.no_grad():
             reconstructed = self.forward(data)
             return reconstructed
+
+    @property
+    def model_loss(self):
+        return self._model_loss
+
+    @model_loss.setter
+    def model_loss(self, value):
+        self._model_loss = value
