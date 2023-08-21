@@ -94,72 +94,77 @@
             <!-- The data will be populated using JavaScript -->
         </tbody>
     </table>
-
-    <div class="pagination" id="pagination">
-        <!-- The pagination buttons will be populated using JavaScript -->
+    <div class="container">
+        <div class="pagination">
+            <button onclick="previousPage()">Previous</button>
+            <button onclick="nextPage()">Next</button>
+        </div>
     </div>
 <script>
-    // Create a closure to preserve the value of 'i'
-    function generatePaginationButtons(currentPage) {
-        var paginationContainer = document.getElementById("pagination");
-        paginationContainer.innerHTML = ""; // Clear existing buttons
-
-        var totalPages = Math.ceil(ticker_list.length / 25);
-        var maxPage = Math.min(currentPage + 2, totalPages);
-        var start_page = Math.max(currentPage - 2, 1);
-        for (var i = start_page; i <= maxPage; i++) {
-            var button = document.createElement("button");
-            button.innerText = i;
-            button.addEventListener("click", function() {
-                updateTable(i);
-            });
-            paginationContainer.appendChild(button);
-        }
-    }
-    function updateTable(pageNumber) {
-        var tableBody = document.getElementById("stocksTableBody");
-        tableBody.innerHTML = ""; // Clear existing rows
-        console.log(pageNumber);
-        var itemsPerPage = 25;
-        var startIndex = (pageNumber - 1) * itemsPerPage;
-        var endIndex = Math.min(startIndex + itemsPerPage, ticker_list.length);
-
-        var promises = [];
-        for(var i = startIndex; i < endIndex; i++){
-            var promise = $.ajax({
-                url: '/stock/' + ticker_list[i],
-                type: 'GET',
-            })
-            promises.push(promise);
-        }
-
-        Promise.all(promises).then(function(data){
-            for(var i = 0; i < data.length; i++){
-                var row = `<tr style="text-align:center">
-                                <td>${ticker_list[i]}</td>
-                                <td>${data[i]["market_cap"]}</td>
-                                <td>${data[i]["net_income"]}</td>
-                                <td>${data[i]["basic_eps"]}</td>
-                            </tr>`;
-                tableBody.innerHTML += row;
-            }
-        }).catch(function(error){
-            console.log(error);
-        });
-        generatePaginationButtons(pageNumber);
-    }
+    var currentPage = 1;
     var ticker_list = [];
-    $.ajax({
+    var table
+    var stock_rows = [];
+    var tableBody = document.getElementById("stocksTableBody");
+    $(document).ready(function() {
+        $.ajax({
         url: '/tickers',
         type: 'GET',
         success: function (data) {
             ticker_list = data;
-            updateTable(1);
-            generatePaginationButtons(1);
+            updateTable(currentPage, ticker_list);
         },
         error: function (error) {
             console.log(error);
         },});
+    })
+
+    $(document).ajaxStop(function(){
+    for(var i = 0; i < stock_rows.length; i++){
+        let row = `<tr style="text-align:center">
+                        <td>${stock_rows[i]["ticker_symbol"]}</td>
+                        <td>${stock_rows[i]["market_cap"]}</td>
+                        <td>${stock_rows[i]["net_income"]}</td>
+                        <td>${stock_rows[i]["basic_eps"]}</td>
+                    </tr>`;
+        tableBody.insertRow().innerHTML = row;
+    }
+    stock_rows = []
+});
+
+    function updateTable(pageNumber, ticker_list) {
+        $("#stocksTableBody").empty(); // Clear existing rows
+        console.log(pageNumber);
+        var itemsPerPage = 25;
+        var startIndex = (pageNumber - 1) * itemsPerPage;
+        var endIndex = Math.min(startIndex + itemsPerPage, ticker_list.length);
+        stock_rows = [];
+        for(var i = startIndex; i < endIndex; i++){
+            $.ajax({
+                url: '/stock/' + ticker_list[i],
+                type: 'GET',
+                success: function (data) {
+                    stock_rows.push(data);
+                },
+                error: function (error) {
+                    console.log(error);
+                },
+            })
+        }
+    }
+
+    function nextPage() {
+        currentPage++;
+        updateTable(currentPage, ticker_list);
+    }
+
+    function previousPage() {
+        if(currentPage <= 1){
+            return;
+        }
+        currentPage--;
+        updateTable(currentPage, ticker_list);
+    }
 {#    document.getElementById("loader").style.display = "block"; // show loader#}
 {#    document.ajaxStop(function() {#}
 {#    const loader = document.querySelector(".loader");#}
